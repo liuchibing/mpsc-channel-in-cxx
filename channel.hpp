@@ -1,6 +1,6 @@
 ﻿/*
 channel.hpp
-A C++ implementation of the 'channel' in rust language (std::mpsc).
+A simple C++ implementation of the 'channel' in rust language (std::mpsc).
 
 # Usage
 Use `make_channel<T>` to create a channel. `make_channel<T>` will return a tuple of (Sender<T>, Receiver<T>).
