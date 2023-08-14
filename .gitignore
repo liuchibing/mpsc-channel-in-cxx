@@ -1,3 +1,6 @@
+# CMake build output files
+cmake-build-*/
+
 ### C++ template
 # Prerequisites
 *.d
