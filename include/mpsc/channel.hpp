@@ -138,7 +138,7 @@ class Sender {
   std::shared_ptr<detail::Channel<T>> channel;
 
   void validate() const {
-    if (!channel) {
+    if (nullptr == channel) {
       throw std::invalid_argument{"This sender has been moved out."};
     }
   }
@@ -177,7 +177,7 @@ class Receiver {
   std::shared_ptr<detail::Channel<T>> channel;
 
   void validate() const {
-    if (!channel) {
+    if (nullptr == channel) {
       throw std::invalid_argument{"This receiver has been moved out."};
     }
   }
@@ -241,8 +241,10 @@ class Receiver {
         }
 
         std::optional<T> tmp = receiver->receive();
-        if (!tmp.has_value())
+        if (not tmp.has_value()) {
           continue;
+        }
+
         current.emplace(std::move(tmp.value()));
         return;
       }
@@ -260,6 +262,7 @@ template <typename T>
 [[nodiscard]] std::tuple<Sender<T>, Receiver<T>> make_channel() {
   static_assert(std::is_copy_constructible_v<T> || std::is_move_constructible_v<T>,
                 "T should be copy-constructible or move-constructible.");
+
   std::shared_ptr<detail::Channel<T>> channel{new detail::Channel<T>()};
   Sender<T> sender{channel};
   Receiver<T> receiver{channel};
@@ -288,7 +291,9 @@ void detail::Channel<T>::send(const T& value) {
   if (_closed) {
     throw channel_closed_exception();
   }
+
   queue.push(value);
+
   if (need_notify) {
     need_notify = false;
     lock.unlock();
@@ -299,13 +304,14 @@ void detail::Channel<T>::send(const T& value) {
 template <typename T>
 std::optional<T> detail::Channel<T>::receive() {
   std::unique_lock lock(mutex);
+
   if (_closed) {
     return std::nullopt;
   }
 
   if (queue.empty()) {
     need_notify = true;
-    condvar.wait(lock, [this] { return !queue.empty() || _closed; });
+    condvar.wait(lock, [this] { return not queue.empty() or _closed; });
   }
 
   if (_closed) {
