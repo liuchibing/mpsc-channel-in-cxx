@@ -228,7 +228,25 @@ class Receiver {
     Receiver<T>* receiver;
     std::optional<T> current = std::nullopt;
 
-    void next();
+    void next() {
+      if (!receiver) {
+        return;
+      }
+
+      while (true) {
+        if (receiver->closed()) {
+          receiver = nullptr;
+          current.reset();
+          return;
+        }
+
+        std::optional<T> tmp = receiver->receive();
+        if (!tmp.has_value())
+          continue;
+        current.emplace(std::move(tmp.value()));
+        return;
+      }
+    }
   };
 
   [[nodiscard]] iterator begin() { return iterator(*this); }
@@ -296,7 +314,7 @@ std::optional<T> detail::Channel<T>::receive() {
 
   T result = std::move(queue.front());
   queue.pop();
-  return result;
+  return {std::move(result)};
 }
 
 template <typename T>
@@ -314,7 +332,7 @@ std::optional<T> detail::Channel<T>::try_receive() {
 
     T result = std::move(queue.front());
     queue.pop();
-    return result;
+    return {std::move(result)};
   }
 
   return {};
@@ -337,24 +355,6 @@ bool detail::Channel<T>::closed() const {
   std::unique_lock lock{mutex};
 
   return _closed;
-}
-
-template <typename T>
-void Receiver<T>::iterator::next() {
-  if (!receiver)
-    return;
-  while (true) {
-    if (receiver->closed()) {
-      receiver = nullptr;
-      current.reset();
-      return;
-    }
-    std::optional<T> tmp = receiver->receive();
-    if (!tmp.has_value())
-      continue;
-    current.emplace(std::move(tmp.value()));
-    return;
-  }
 }
 
 }  // namespace mpsc
