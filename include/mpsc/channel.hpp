@@ -65,7 +65,7 @@ std::tuple<Sender<T>, Receiver<T>> make_channel();
 
 class channel_closed_exception : std::logic_error {
  public:
-  channel_closed_exception() : std::logic_error("This channel has been closed.") {}
+  channel_closed_exception() : std::logic_error{"This channel has been closed."} {}
 };
 
 namespace detail {
@@ -96,7 +96,7 @@ class Channel {  // Do NOT use this class directly.
   bool need_notify = false;
   bool _closed     = false;
 
-  friend typename std::tuple<Sender<T>, Receiver<T>> make_channel<T>();
+  friend std::tuple<Sender<T>, Receiver<T>> make_channel<T>();
 };
 }  // namespace detail
 
@@ -133,13 +133,13 @@ class Sender {
   Sender<T>& operator=(Sender<T>&&) noexcept = default;
 
  private:
-  explicit Sender(std::shared_ptr<detail::Channel<T>> channel) : channel(channel){};
+  explicit Sender(std::shared_ptr<detail::Channel<T>> channel) : channel{ channel } {};
 
   std::shared_ptr<detail::Channel<T>> channel;
 
   void validate() const {
     if (!channel) {
-      throw std::invalid_argument("This sender has been moved out.");
+      throw std::invalid_argument{"This sender has been moved out."};
     }
   }
 
@@ -178,7 +178,7 @@ class Receiver {
 
   void validate() const {
     if (!channel) {
-      throw std::invalid_argument("This receiver has been moved out.");
+      throw std::invalid_argument{"This receiver has been moved out."};
     }
   }
 
@@ -196,13 +196,15 @@ class Receiver {
     using typename BaseIter::reference;
     using typename BaseIter::value_type;
 
-    iterator() : receiver(nullptr) {}
+    iterator() : receiver{ nullptr } {}
 
-    explicit iterator(Receiver<T>& receiver) : receiver(&receiver) {
-      if (this->receiver->closed())
+    explicit iterator(Receiver<T>& receiver) : receiver{ &receiver } {
+      if (this->receiver->closed()) {
         this->receiver = nullptr;
-      else
+      }
+      else {
         next();
+      }
     }
 
     reference operator*() { return current.value(); }
@@ -217,10 +219,10 @@ class Receiver {
     iterator operator++(int) = delete;
 
     [[nodiscard]] bool operator==(const iterator& other) const noexcept {
-      return receiver == nullptr && other.receiver == nullptr;
+      return receiver == nullptr and other.receiver == nullptr;
     }
 
-    [[nodiscard]] bool operator!=(iterator& other) const noexcept { return !(*this == other); }
+    [[nodiscard]] bool operator!=(iterator& other) const noexcept { return not (*this == other); }
 
    private:
     Receiver<T>* receiver;
@@ -252,7 +254,9 @@ void detail::Channel<T>::send(T&& value) {
   if (_closed) {
     throw channel_closed_exception();
   }
+
   queue.push(std::move(value));
+
   if (need_notify) {
     need_notify = false;
     lock.unlock();
@@ -280,13 +284,16 @@ std::optional<T> detail::Channel<T>::receive() {
   if (_closed) {
     return std::nullopt;
   }
+
   if (queue.empty()) {
     need_notify = true;
     condvar.wait(lock, [this] { return !queue.empty() || _closed; });
   }
+
   if (_closed) {
-    return std::nullopt;
+    return {};
   }
+
   T result = std::move(queue.front());
   queue.pop();
   return result;
@@ -295,21 +302,28 @@ std::optional<T> detail::Channel<T>::receive() {
 template <typename T>
 std::optional<T> detail::Channel<T>::try_receive() {
   if (mutex.try_lock()) {
-    std::unique_lock lock(mutex, std::adopt_lock);
-    if (_closed)
-      return std::nullopt;
-    if (queue.empty())
-      return std::nullopt;
+    std::unique_lock lock{mutex, std::adopt_lock};
+
+    if (_closed) {
+      return {};
+    }
+
+    if (queue.empty()) {
+      return {};
+    }
+
     T result = std::move(queue.front());
     queue.pop();
     return result;
   }
-  return std::nullopt;
+
+  return {};
 }
 
 template <typename T>
 void detail::Channel<T>::close() {
-  std::unique_lock lock(mutex);
+  std::unique_lock lock{mutex};
+
   _closed = true;
   if (need_notify) {
     need_notify = false;
@@ -320,7 +334,8 @@ void detail::Channel<T>::close() {
 
 template <typename T>
 bool detail::Channel<T>::closed() const {
-  std::unique_lock lock(mutex);
+  std::unique_lock lock{mutex};
+
   return _closed;
 }
 
