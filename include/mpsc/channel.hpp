@@ -83,7 +83,7 @@ public:
 	Channel<T>& operator=(Channel<T>&&) = delete;
 
 private:
-	Channel() {};
+	Channel() = default;
 	
 	std::queue<T, std::list<T>> queue;
 	std::mutex mutex;
@@ -118,16 +118,16 @@ public:
 		return channel->closed();
 	}
 	
-	operator bool() const { return static_cast<bool>(channel); }
+	explicit operator bool() const { return static_cast<bool>(channel); }
 
 	Sender(const Sender<T>&) = default;
-	Sender(Sender<T>&&) = default;
+	Sender(Sender<T>&&) noexcept = default;
 
 	Sender<T>& operator=(const Sender<T>&) = default;
-	Sender<T>& operator=(Sender<T>&&) = default;
+	Sender<T>& operator=(Sender<T>&&)  noexcept = default;
 
 private:
-	Sender(std::shared_ptr<Channel<T>> channel): channel(channel) {};
+	explicit Sender(std::shared_ptr<Channel<T>> channel): channel(channel) {};
 	
 	std::shared_ptr<Channel<T>> channel;
 	
@@ -158,22 +158,22 @@ public:
 		return channel->closed();
 	}
 	
-	operator bool() const {
+	explicit operator bool() const {
 		return static_cast<bool>(channel);
 	}
 	
-	Receiver(Receiver<T>&&) = default;
-	Receiver<T>& operator=(Receiver<T>&&) = default;
+	Receiver(Receiver<T>&&)  noexcept = default;
+	Receiver<T>& operator=(Receiver<T>&&)  noexcept = default;
 	
 	Receiver(const Receiver<T>&) = delete;
 	Receiver<T>& operator=(const Receiver<T>&) = delete;
 	
 private:
-	Receiver(std::shared_ptr<Channel<T>> channel): channel(channel) {};
+	explicit Receiver(std::shared_ptr<Channel<T>> channel): channel(channel) {};
 	
 	std::shared_ptr<Channel<T>> channel;
 	
-	void validate() {
+	void validate() const {
 		if (!channel) {
 			throw std::invalid_argument("This receiver has been moved out.");
 		}
@@ -194,7 +194,7 @@ public:
 		using typename BaseIter::difference_type;
 		
 		iterator(): receiver(nullptr) {}
-		iterator(Receiver<T>& receiver): receiver(&receiver) {
+		explicit iterator(Receiver<T>& receiver): receiver(&receiver) {
 			if (this->receiver->closed()) this->receiver = nullptr;
 			else next();
 		}
@@ -206,7 +206,7 @@ public:
 			return *this;
 		}
 		iterator operator++(int) = delete;
-		bool operator==(iterator& other) {
+		bool operator==(const iterator& other) const {
 			if (receiver == nullptr && other.receiver == nullptr) return true;
 			return false;
 		}
