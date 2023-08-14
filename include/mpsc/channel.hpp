@@ -74,7 +74,7 @@ public:
 	std::optional<T> try_receive();
 
 	void close();
-	bool closed();
+	[[nodiscard]] bool closed() const;
 
 	Channel(const Channel<T>&) = delete;
 	Channel(Channel<T>&&) = delete;
@@ -86,7 +86,7 @@ private:
 	Channel() = default;
 	
 	std::queue<T, std::list<T>> queue;
-	std::mutex mutex;
+	mutable std::mutex mutex;
 	std::condition_variable condvar;
 	bool need_notify = false;
 	bool _closed = false;
@@ -112,13 +112,13 @@ public:
 		validate();
 		channel->close();
 	}
-	
-	bool closed() {
+
+    [[nodiscard]] bool closed() const {
 		validate();
 		return channel->closed();
 	}
-	
-	explicit operator bool() const { return static_cast<bool>(channel); }
+
+    [[nodiscard]] explicit operator bool() const { return static_cast<bool>(channel); }
 
 	Sender(const Sender<T>&) = default;
 	Sender(Sender<T>&&) noexcept = default;
@@ -131,7 +131,7 @@ private:
 	
 	std::shared_ptr<Channel<T>> channel;
 	
-	void validate() {
+	void validate() const {
 		if (!channel) {
 			throw std::invalid_argument("This sender has been moved out.");
 		}
@@ -152,13 +152,13 @@ public:
 		validate();
 		return channel->try_receive();
 	}
-	
-	bool closed() {
+
+    [[nodiscard]] bool closed() const {
 		validate();
 		return channel->closed();
 	}
-	
-	explicit operator bool() const {
+
+    [[nodiscard]] explicit operator bool() const {
 		return static_cast<bool>(channel);
 	}
 	
@@ -206,11 +206,10 @@ public:
 			return *this;
 		}
 		iterator operator++(int) = delete;
-		bool operator==(const iterator& other) const {
-			if (receiver == nullptr && other.receiver == nullptr) return true;
-			return false;
+        [[nodiscard]] bool operator==(const iterator& other) const noexcept {
+			return receiver == nullptr && other.receiver == nullptr;
 		}
-		bool operator!=(iterator& other) {
+        [[nodiscard]] bool operator!=(iterator& other) const noexcept {
 			return !(*this == other);
 		}
 	private:
@@ -218,12 +217,12 @@ public:
 		std::optional<T> current = std::nullopt;
 		void next();
 	};
-	
-	iterator begin() {
+
+    [[nodiscard]] iterator begin() {
 		return iterator(*this);
 	}
-	
-	iterator end() {
+
+    [[nodiscard]] iterator end() {
 		return iterator();
 	}
 };
@@ -231,7 +230,7 @@ public:
 /* ======== Implementations ========= */
 
 template <typename T>
-std::tuple<Sender<T>, Receiver<T>> make_channel() {
+    [[nodiscard]] std::tuple<Sender<T>, Receiver<T>> make_channel() {
 	static_assert(std::is_copy_constructible_v<T> || std::is_move_constructible_v<T>, "T should be copy-constructible or move-constructible.");
 	std::shared_ptr<Channel<T>> channel{new Channel<T>()};
 	Sender<T> sender{channel};
@@ -315,7 +314,7 @@ void Channel<T>::close() {
 }
 
 template <typename T>
-bool Channel<T>::closed() {
+bool Channel<T>::closed() const {
 	std::unique_lock lock(mutex);
 	return _closed;
 }
