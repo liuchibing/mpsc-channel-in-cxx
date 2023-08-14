@@ -3,16 +3,19 @@
 #include <mpsc/channel.hpp>
 
 #include <cassert>
+#include <iostream>
 
 auto main(int argc, char **argv) -> int {
     // Create.
     auto [sender, receiver] = mpsc::make_channel<int>();
 
-    // Send.
+    std::cout << "Sending \"3\" via channel..." << std::endl;
     sender.send(3);
 
     // Receive (both returns a std::optional<T>.)
-    receiver.receive(); // Blocking when there is nothing present in the channel.
+    const auto recvd = receiver.receive(); // Blocking when there is nothing present in the channel.
+    std::cout << "Received: " << recvd.value() << std::endl;
+
     receiver.try_receive(); // Not blocking. Return immediately.
 
     // close() and closed()
