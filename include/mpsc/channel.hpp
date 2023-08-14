@@ -64,35 +64,42 @@ public:
 	channel_closed_exception(): std::logic_error("This channel has been closed.") {}
 };
 
-template <typename T>
-class Channel { // Do NOT use this class directly.
-public:
-	void send(T&& value);
-	void send(const T& value);
+namespace detail {
+    template<typename T>
+    class Channel { // Do NOT use this class directly.
+    public:
+        void send(T &&value);
 
-	std::optional<T> receive();
-	std::optional<T> try_receive();
+        void send(const T &value);
 
-	void close();
-	[[nodiscard]] bool closed() const;
+        std::optional<T> receive();
 
-	Channel(const Channel<T>&) = delete;
-	Channel(Channel<T>&&) = delete;
+        std::optional<T> try_receive();
 
-	Channel<T>& operator=(const Channel<T>&) = delete;
-	Channel<T>& operator=(Channel<T>&&) = delete;
+        void close();
 
-private:
-	Channel() = default;
-	
-	std::queue<T, std::list<T>> queue;
-	mutable std::mutex mutex;
-	std::condition_variable condvar;
-	bool need_notify = false;
-	bool _closed = false;
-	
-	friend std::tuple<Sender<T>, Receiver<T>> make_channel<T>();
-};
+        [[nodiscard]] bool closed() const;
+
+        Channel(const Channel<T> &) = delete;
+
+        Channel(Channel<T> &&) = delete;
+
+        Channel<T> &operator=(const Channel<T> &) = delete;
+
+        Channel<T> &operator=(Channel<T> &&) = delete;
+
+    private:
+        Channel() = default;
+
+        std::queue<T, std::list<T>> queue;
+        mutable std::mutex mutex;
+        std::condition_variable condvar;
+        bool need_notify = false;
+        bool _closed = false;
+
+        friend typename std::tuple<Sender<T>, Receiver<T>> make_channel<T>();
+    };
+}
 
 template <typename T>
 class Sender {
@@ -127,9 +134,9 @@ public:
 	Sender<T>& operator=(Sender<T>&&)  noexcept = default;
 
 private:
-	explicit Sender(std::shared_ptr<Channel<T>> channel): channel(channel) {};
+	explicit Sender(std::shared_ptr<detail::Channel<T>> channel): channel(channel) {};
 	
-	std::shared_ptr<Channel<T>> channel;
+	std::shared_ptr<detail::Channel<T>> channel;
 	
 	void validate() const {
 		if (!channel) {
@@ -169,9 +176,9 @@ public:
 	Receiver<T>& operator=(const Receiver<T>&) = delete;
 	
 private:
-	explicit Receiver(std::shared_ptr<Channel<T>> channel): channel(channel) {};
+	explicit Receiver(std::shared_ptr<detail::Channel<T>> channel): channel(channel) {};
 	
-	std::shared_ptr<Channel<T>> channel;
+	std::shared_ptr<detail::Channel<T>> channel;
 	
 	void validate() const {
 		if (!channel) {
@@ -229,20 +236,21 @@ public:
 
 /* ======== Implementations ========= */
 
-template <typename T>
-    [[nodiscard]] std::tuple<Sender<T>, Receiver<T>> make_channel() {
-	static_assert(std::is_copy_constructible_v<T> || std::is_move_constructible_v<T>, "T should be copy-constructible or move-constructible.");
-	std::shared_ptr<Channel<T>> channel{new Channel<T>()};
-	Sender<T> sender{channel};
-	Receiver<T> receiver{channel};
-	return std::tuple<Sender<T>, Receiver<T>>{
-		std::move(sender),
-		std::move(receiver)
-	};
+template<typename T>
+[[nodiscard]] std::tuple<Sender<T>, Receiver<T>> make_channel() {
+    static_assert(std::is_copy_constructible_v<T> || std::is_move_constructible_v<T>,
+                  "T should be copy-constructible or move-constructible.");
+    std::shared_ptr<detail::Channel<T>> channel{new detail::Channel<T>()};
+    Sender<T> sender{channel};
+    Receiver<T> receiver{channel};
+    return std::tuple<Sender<T>, Receiver<T>>{
+            std::move(sender),
+            std::move(receiver)
+    };
 }
 
 template <typename T>
-void Channel<T>::send(T&& value) {
+void detail::Channel<T>::send(T&& value) {
 	std::unique_lock lock(mutex);
 	if (_closed) {
 		throw channel_closed_exception();
@@ -256,7 +264,7 @@ void Channel<T>::send(T&& value) {
 }
 
 template <typename T>
-void Channel<T>::send(const T& value) {
+void detail::Channel<T>::send(const T& value) {
 	std::unique_lock lock(mutex);
 	if (_closed) {
 		throw channel_closed_exception();
@@ -270,7 +278,7 @@ void Channel<T>::send(const T& value) {
 }
 
 template <typename T>
-std::optional<T> Channel<T>::receive() {
+std::optional<T> detail::Channel<T>::receive() {
 	std::unique_lock lock(mutex);
 	if (_closed) {
 		return std::nullopt;
@@ -290,7 +298,7 @@ std::optional<T> Channel<T>::receive() {
 }
 
 template <typename T>
-std::optional<T> Channel<T>::try_receive() {
+std::optional<T> detail::Channel<T>::try_receive() {
 	if (mutex.try_lock()) {
 		std::unique_lock lock(mutex, std::adopt_lock);
 		if (_closed) return std::nullopt;
@@ -303,7 +311,7 @@ std::optional<T> Channel<T>::try_receive() {
 }
 
 template <typename T>
-void Channel<T>::close() {
+void detail::Channel<T>::close() {
 	std::unique_lock lock(mutex);
 	_closed = true;
 	if (need_notify) {
@@ -314,7 +322,7 @@ void Channel<T>::close() {
 }
 
 template <typename T>
-bool Channel<T>::closed() const {
+bool detail::Channel<T>::closed() const {
 	std::unique_lock lock(mutex);
 	return _closed;
 }
