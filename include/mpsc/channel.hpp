@@ -24,13 +24,14 @@ assert(result == receiver.closed());
 
 // You can use range-based for loop to receive from the channel.
 for (int v: receiver) {
-	// do something with v
-	// The loop will stop immedately after the sender called close().
-	// Only sender can call close().
+        // do something with v
+        // The loop will stop immedately after the sender called close().
+        // Only sender can call close().
 }
 ```
 
-Note: `mpsc` stands for Multi-Producer Single-Consumer. So `Sender` can be either copied and moved, but `Receiver` can only be moved.
+Note: `mpsc` stands for Multi-Producer Single-Consumer. So `Sender` can be either copied and moved, but `Receiver` can only be
+moved.
 
 Feel free to explore the `tests.cpp`. The tests are also examples of the usage.
 
@@ -39,309 +40,306 @@ Read the source if you need more information. Sorry for the lack of comments. ï½
 Copyright (c) 2019 liuchibing.
 */
 
-#include <list>
-#include <queue>
-#include <mutex>
-#include <optional>
-#include <tuple>
-#include <memory>
-#include <utility>
 #include <condition_variable>
 #include <exception>
-#include <type_traits>
 #include <iterator>
+#include <list>
+#include <memory>
+#include <mutex>
+#include <optional>
+#include <queue>
+#include <tuple>
+#include <type_traits>
+#include <utility>
 
 namespace mpsc {
 
-template <typename T> class Sender;
-template <typename T> class Receiver;
+template <typename T>
+class Sender;
+
+template <typename T>
+class Receiver;
 
 template <typename T>
 std::tuple<Sender<T>, Receiver<T>> make_channel();
 
-class channel_closed_exception: std::logic_error {
-public:
-	channel_closed_exception(): std::logic_error("This channel has been closed.") {}
+class channel_closed_exception : std::logic_error {
+ public:
+  channel_closed_exception() : std::logic_error("This channel has been closed.") {}
 };
 
 namespace detail {
-    template<typename T>
-    class Channel { // Do NOT use this class directly.
-    public:
-        void send(T &&value);
+template <typename T>
+class Channel {  // Do NOT use this class directly.
+ public:
+  void send(T&& value);
+  void send(const T& value);
 
-        void send(const T &value);
+  std::optional<T> receive();
+  std::optional<T> try_receive();
 
-        std::optional<T> receive();
+  void close();
 
-        std::optional<T> try_receive();
+  [[nodiscard]] bool closed() const;
 
-        void close();
+  Channel(const Channel<T>&) = delete;
+  Channel(Channel<T>&&) = delete;
+  Channel<T>& operator=(const Channel<T>&) = delete;
+  Channel<T>& operator=(Channel<T>&&) = delete;
 
-        [[nodiscard]] bool closed() const;
+ private:
+  Channel() = default;
 
-        Channel(const Channel<T> &) = delete;
+  std::queue<T, std::list<T>> queue;
+  mutable std::mutex mutex;
+  std::condition_variable condvar;
+  bool need_notify = false;
+  bool _closed     = false;
 
-        Channel(Channel<T> &&) = delete;
-
-        Channel<T> &operator=(const Channel<T> &) = delete;
-
-        Channel<T> &operator=(Channel<T> &&) = delete;
-
-    private:
-        Channel() = default;
-
-        std::queue<T, std::list<T>> queue;
-        mutable std::mutex mutex;
-        std::condition_variable condvar;
-        bool need_notify = false;
-        bool _closed = false;
-
-        friend typename std::tuple<Sender<T>, Receiver<T>> make_channel<T>();
-    };
-}
+  friend typename std::tuple<Sender<T>, Receiver<T>> make_channel<T>();
+};
+}  // namespace detail
 
 template <typename T>
 class Sender {
-public:
-	Sender<T>& send(T&& value) {
-		validate();
-		channel->send(std::move(value));
-		return *this;
-	}
-	Sender<T>& send(const T& value) {
-		validate();
-		channel->send(value);
-		return *this;
-	}
+ public:
+  Sender<T>& send(T&& value) {
+    validate();
+    channel->send(std::move(value));
+    return *this;
+  }
 
-	void close() {
-		validate();
-		channel->close();
-	}
+  Sender<T>& send(const T& value) {
+    validate();
+    channel->send(value);
+    return *this;
+  }
 
-    [[nodiscard]] bool closed() const {
-		validate();
-		return channel->closed();
-	}
+  void close() {
+    validate();
+    channel->close();
+  }
 
-    [[nodiscard]] explicit operator bool() const { return static_cast<bool>(channel); }
+  [[nodiscard]] bool closed() const {
+    validate();
+    return channel->closed();
+  }
 
-	Sender(const Sender<T>&) = default;
-	Sender(Sender<T>&&) noexcept = default;
+  [[nodiscard]] explicit operator bool() const { return static_cast<bool>(channel); }
 
-	Sender<T>& operator=(const Sender<T>&) = default;
-	Sender<T>& operator=(Sender<T>&&)  noexcept = default;
+  Sender(const Sender<T>&) = default;
+  Sender(Sender<T>&&) noexcept = default;
+  Sender<T>& operator=(const Sender<T>&) = default;
+  Sender<T>& operator=(Sender<T>&&) noexcept = default;
 
-private:
-	explicit Sender(std::shared_ptr<detail::Channel<T>> channel): channel(channel) {};
-	
-	std::shared_ptr<detail::Channel<T>> channel;
-	
-	void validate() const {
-		if (!channel) {
-			throw std::invalid_argument("This sender has been moved out.");
-		}
-	}
+ private:
+  explicit Sender(std::shared_ptr<detail::Channel<T>> channel) : channel(channel){};
 
-	friend std::tuple<Sender<T>, Receiver<T>> make_channel<T>();
+  std::shared_ptr<detail::Channel<T>> channel;
+
+  void validate() const {
+    if (!channel) {
+      throw std::invalid_argument("This sender has been moved out.");
+    }
+  }
+
+  friend std::tuple<Sender<T>, Receiver<T>> make_channel<T>();
 };
 
 template <typename T>
 class Receiver {
-public:
-	std::optional<T> receive() {
-		validate();
-		return channel->receive();
-	}
+ public:
+  std::optional<T> receive() {
+    validate();
+    return channel->receive();
+  }
 
-	std::optional<T> try_receive() {
-		validate();
-		return channel->try_receive();
-	}
+  std::optional<T> try_receive() {
+    validate();
+    return channel->try_receive();
+  }
 
-    [[nodiscard]] bool closed() const {
-		validate();
-		return channel->closed();
-	}
+  [[nodiscard]] bool closed() const {
+    validate();
+    return channel->closed();
+  }
 
-    [[nodiscard]] explicit operator bool() const {
-		return static_cast<bool>(channel);
-	}
-	
-	Receiver(Receiver<T>&&)  noexcept = default;
-	Receiver<T>& operator=(Receiver<T>&&)  noexcept = default;
-	
-	Receiver(const Receiver<T>&) = delete;
-	Receiver<T>& operator=(const Receiver<T>&) = delete;
-	
-private:
-	explicit Receiver(std::shared_ptr<detail::Channel<T>> channel): channel(channel) {};
-	
-	std::shared_ptr<detail::Channel<T>> channel;
-	
-	void validate() const {
-		if (!channel) {
-			throw std::invalid_argument("This receiver has been moved out.");
-		}
-	}
-	
-	friend std::tuple<Sender<T>, Receiver<T>> make_channel<T>();
+  [[nodiscard]] explicit operator bool() const { return static_cast<bool>(channel); }
 
-public:
-	class iterator
-	: public std::iterator<std::input_iterator_tag,T> {
-	private:
-		typedef std::iterator<std::input_iterator_tag,T> BaseIter;
-	public:
-		using typename BaseIter::iterator_category;
-		using typename BaseIter::value_type;
-		using typename BaseIter::reference;
-        using typename BaseIter::pointer;
-		using typename BaseIter::difference_type;
-		
-		iterator(): receiver(nullptr) {}
-		explicit iterator(Receiver<T>& receiver): receiver(&receiver) {
-			if (this->receiver->closed()) this->receiver = nullptr;
-			else next();
-		}
-	
-		reference operator*() { return current.value(); }
-		pointer operator->() { return &current.value(); }
-		iterator& operator++() {
-			next();
-			return *this;
-		}
-		iterator operator++(int) = delete;
-        [[nodiscard]] bool operator==(const iterator& other) const noexcept {
-			return receiver == nullptr && other.receiver == nullptr;
-		}
-        [[nodiscard]] bool operator!=(iterator& other) const noexcept {
-			return !(*this == other);
-		}
-	private:
-		Receiver<T>* receiver;
-		std::optional<T> current = std::nullopt;
-		void next();
-	};
+  Receiver(Receiver<T>&&) noexcept = default;
+  Receiver<T>& operator=(Receiver<T>&&) noexcept = default;
+  Receiver(const Receiver<T>&) = delete;
+  Receiver<T>& operator=(const Receiver<T>&) = delete;
 
-    [[nodiscard]] iterator begin() {
-		return iterator(*this);
-	}
+ private:
+  explicit Receiver(std::shared_ptr<detail::Channel<T>> channel) : channel(channel){};
 
-    [[nodiscard]] iterator end() {
-		return iterator();
-	}
+  std::shared_ptr<detail::Channel<T>> channel;
+
+  void validate() const {
+    if (!channel) {
+      throw std::invalid_argument("This receiver has been moved out.");
+    }
+  }
+
+  friend std::tuple<Sender<T>, Receiver<T>> make_channel<T>();
+
+ public:
+  class iterator : public std::iterator<std::input_iterator_tag, T> {
+   private:
+    typedef std::iterator<std::input_iterator_tag, T> BaseIter;
+
+   public:
+    using typename BaseIter::difference_type;
+    using typename BaseIter::iterator_category;
+    using typename BaseIter::pointer;
+    using typename BaseIter::reference;
+    using typename BaseIter::value_type;
+
+    iterator() : receiver(nullptr) {}
+
+    explicit iterator(Receiver<T>& receiver) : receiver(&receiver) {
+      if (this->receiver->closed())
+        this->receiver = nullptr;
+      else
+        next();
+    }
+
+    reference operator*() { return current.value(); }
+
+    pointer operator->() { return &current.value(); }
+
+    iterator& operator++() {
+      next();
+      return *this;
+    }
+
+    iterator operator++(int) = delete;
+
+    [[nodiscard]] bool operator==(const iterator& other) const noexcept {
+      return receiver == nullptr && other.receiver == nullptr;
+    }
+
+    [[nodiscard]] bool operator!=(iterator& other) const noexcept { return !(*this == other); }
+
+   private:
+    Receiver<T>* receiver;
+    std::optional<T> current = std::nullopt;
+
+    void next();
+  };
+
+  [[nodiscard]] iterator begin() { return iterator(*this); }
+
+  [[nodiscard]] iterator end() { return iterator(); }
 };
 
 /* ======== Implementations ========= */
 
-template<typename T>
+template <typename T>
 [[nodiscard]] std::tuple<Sender<T>, Receiver<T>> make_channel() {
-    static_assert(std::is_copy_constructible_v<T> || std::is_move_constructible_v<T>,
-                  "T should be copy-constructible or move-constructible.");
-    std::shared_ptr<detail::Channel<T>> channel{new detail::Channel<T>()};
-    Sender<T> sender{channel};
-    Receiver<T> receiver{channel};
-    return std::tuple<Sender<T>, Receiver<T>>{
-            std::move(sender),
-            std::move(receiver)
-    };
+  static_assert(std::is_copy_constructible_v<T> || std::is_move_constructible_v<T>,
+                "T should be copy-constructible or move-constructible.");
+  std::shared_ptr<detail::Channel<T>> channel{new detail::Channel<T>()};
+  Sender<T> sender{channel};
+  Receiver<T> receiver{channel};
+  return std::tuple<Sender<T>, Receiver<T>>{std::move(sender), std::move(receiver)};
 }
 
 template <typename T>
 void detail::Channel<T>::send(T&& value) {
-	std::unique_lock lock(mutex);
-	if (_closed) {
-		throw channel_closed_exception();
-	}
-	queue.push(std::move(value));
-	if (need_notify) {
-		need_notify = false;
-		lock.unlock();
-		condvar.notify_one();
-	}
+  std::unique_lock lock(mutex);
+  if (_closed) {
+    throw channel_closed_exception();
+  }
+  queue.push(std::move(value));
+  if (need_notify) {
+    need_notify = false;
+    lock.unlock();
+    condvar.notify_one();
+  }
 }
 
 template <typename T>
 void detail::Channel<T>::send(const T& value) {
-	std::unique_lock lock(mutex);
-	if (_closed) {
-		throw channel_closed_exception();
-	}
-	queue.push(value);
-	if (need_notify) {
-		need_notify = false;
-		lock.unlock();
-		condvar.notify_one();
-	}
+  std::unique_lock lock(mutex);
+  if (_closed) {
+    throw channel_closed_exception();
+  }
+  queue.push(value);
+  if (need_notify) {
+    need_notify = false;
+    lock.unlock();
+    condvar.notify_one();
+  }
 }
 
 template <typename T>
 std::optional<T> detail::Channel<T>::receive() {
-	std::unique_lock lock(mutex);
-	if (_closed) {
-		return std::nullopt;
-	}
-	if (queue.empty()) {
-		need_notify = true;
-		condvar.wait(lock, [this] {
-			return !queue.empty() || _closed;
-		});
-	}
-	if (_closed) {
-		return std::nullopt;
-	}
-	T result = std::move(queue.front());
-	queue.pop();
-	return result;
+  std::unique_lock lock(mutex);
+  if (_closed) {
+    return std::nullopt;
+  }
+  if (queue.empty()) {
+    need_notify = true;
+    condvar.wait(lock, [this] { return !queue.empty() || _closed; });
+  }
+  if (_closed) {
+    return std::nullopt;
+  }
+  T result = std::move(queue.front());
+  queue.pop();
+  return result;
 }
 
 template <typename T>
 std::optional<T> detail::Channel<T>::try_receive() {
-	if (mutex.try_lock()) {
-		std::unique_lock lock(mutex, std::adopt_lock);
-		if (_closed) return std::nullopt;
-		if (queue.empty()) return std::nullopt;
-		T result = std::move(queue.front());
-		queue.pop();
-		return result;
-	}
-	return std::nullopt;
+  if (mutex.try_lock()) {
+    std::unique_lock lock(mutex, std::adopt_lock);
+    if (_closed)
+      return std::nullopt;
+    if (queue.empty())
+      return std::nullopt;
+    T result = std::move(queue.front());
+    queue.pop();
+    return result;
+  }
+  return std::nullopt;
 }
 
 template <typename T>
 void detail::Channel<T>::close() {
-	std::unique_lock lock(mutex);
-	_closed = true;
-	if (need_notify) {
-		need_notify = false;
-		lock.unlock();
-		condvar.notify_one();
-	}
+  std::unique_lock lock(mutex);
+  _closed = true;
+  if (need_notify) {
+    need_notify = false;
+    lock.unlock();
+    condvar.notify_one();
+  }
 }
 
 template <typename T>
 bool detail::Channel<T>::closed() const {
-	std::unique_lock lock(mutex);
-	return _closed;
+  std::unique_lock lock(mutex);
+  return _closed;
 }
 
 template <typename T>
 void Receiver<T>::iterator::next() {
-	if (!receiver) return;
-	while(true)
-	{
-		if (receiver->closed()) {
-			receiver = nullptr;
-			current.reset();
-			return;
-		}
-		std::optional<T> tmp = receiver->receive();
-		if (!tmp.has_value()) continue;
-		current.emplace(std::move(tmp.value()));
-		return;
-	}
+  if (!receiver)
+    return;
+  while (true) {
+    if (receiver->closed()) {
+      receiver = nullptr;
+      current.reset();
+      return;
+    }
+    std::optional<T> tmp = receiver->receive();
+    if (!tmp.has_value())
+      continue;
+    current.emplace(std::move(tmp.value()));
+    return;
+  }
 }
 
-}
+}  // namespace mpsc
