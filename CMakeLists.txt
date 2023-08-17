@@ -28,7 +28,7 @@ if (CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     add_subdirectory("test")
     add_subdirectory("examples")
 
-    set(package_files wite/ CMakeLists.txt)
+    set(package_files include/ CMakeLists.txt)
     add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.${PROJECT_VERSION}.zip
             COMMAND ${CMAKE_COMMAND} -E tar c ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.${PROJECT_VERSION}.zip --format=zip -- ${package_files}
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
