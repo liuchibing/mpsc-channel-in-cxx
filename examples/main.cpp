@@ -26,7 +26,7 @@ auto main(int argc, char** argv) -> int {
   // You can use range-based for loop to receive from the channel.
   for (int v : receiver) {
     // do something with v
-    // The loop will stop immedately after the sender called close().
+    // The loop will stop immediately after the sender called close().
     // Only sender can call close().
   }
 
