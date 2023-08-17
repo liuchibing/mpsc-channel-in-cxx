@@ -7,6 +7,11 @@
 #include <random>
 #include <algorithm>
 #include <vector>
+#include <future>
+#include <condition_variable>
+#include <chrono>
+
+using namespace std::chrono_literals;
 
 TEST_CASE("Channel tests") {
   auto rng = std::mt19937_64{7654236};  // Arbitrary seed.
@@ -43,6 +48,31 @@ TEST_CASE("Channel tests") {
       std::copy_n(rx.begin(), 10, std::back_inserter(vals));
 
       REQUIRE(std::vector{0, 1, 2, 3, 4, 5, 6, 7, 8, 9} == vals);
+    }
+
+    SECTION("Closing sender ends receiver iterator wait") {
+      auto receiving_now = std::condition_variable{};
+      auto mtx = std::mutex{};
+      auto lock = std::unique_lock<std::mutex>{mtx};
+
+      auto recvd = std::vector<int>{};
+      tx.send(12);
+
+      auto async_recv = std::async([&](){
+        receiving_now.notify_all();
+        std::copy(rx.begin(), rx.end(), std::back_inserter(recvd));
+      });
+
+      receiving_now.wait(lock);
+
+      // Wait for a short time to ensure that the available items are processed
+      std::this_thread::sleep_for(10ms);
+
+      // Closing the transmitter should terminate the receiver.
+      tx.close();
+
+      REQUIRE(std::vector{ 12 } == recvd);
+      REQUIRE(std::future_status::ready == async_recv.wait_for(1s));
     }
   }
 }

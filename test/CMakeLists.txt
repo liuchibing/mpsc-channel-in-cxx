@@ -27,6 +27,7 @@ target_include_directories(mspc_test PUBLIC
 
 target_link_libraries(mspc_test
         PRIVATE
+        pthread
         Catch2::Catch2WithMain
         mpsc)
 
