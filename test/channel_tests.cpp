@@ -79,5 +79,21 @@ TEST_CASE("Channel tests") {
       REQUIRE(std::vector{ 12 } == recvd);
       REQUIRE(std::future_status::ready == async_recv.wait_for(1s));
     }
+
+    SECTION("Channel is closed when its last sender goes out of scope") {
+        auto [tx_1, rx_1] = mpsc::make_channel<double>();
+        {
+            auto _1 = tx_1;  // This copy keeps the channel alive while it's in scope.
+            {
+                auto _2 = _1;
+                {
+                    auto tx_to_kill = std::move(tx_1);
+                }
+                REQUIRE_FALSE(rx_1.closed());
+            }
+            REQUIRE_FALSE(rx_1.closed());
+        }
+        REQUIRE(rx_1.closed());
+    }
   }
 }

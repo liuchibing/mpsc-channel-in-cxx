@@ -112,6 +112,15 @@ class Channel {  // Do NOT use this class directly.
 
 template <typename T>
 class Sender {
+    class ChannelCloser {
+        detail::Channel<T>& channel;
+    public:
+        explicit ChannelCloser(detail::Channel<T>& channel) : channel{channel} {}
+        ~ChannelCloser(){
+            channel.close();
+        }
+    };
+
  public:
   Sender<T>& send(T&& value) {
     validate();
@@ -143,9 +152,13 @@ class Sender {
   Sender<T>& operator=(Sender<T>&&) noexcept = default;
 
  private:
-  explicit Sender(std::shared_ptr<detail::Channel<T>> channel) : channel{ channel } {};
+  explicit Sender(std::shared_ptr<detail::Channel<T>> channel)
+    : channel{ channel }
+    , channel_closer{std::make_shared<ChannelCloser>(*(this->channel))}
+    {};
 
   std::shared_ptr<detail::Channel<T>> channel;
+  std::shared_ptr<ChannelCloser> channel_closer;
 
   void validate() const {
     if (nullptr == channel) {
