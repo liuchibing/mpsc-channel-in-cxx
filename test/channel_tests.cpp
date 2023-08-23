@@ -95,5 +95,23 @@ TEST_CASE("Channel tests") {
         }
         REQUIRE(rx_1.closed());
     }
+
+    SECTION("Closing a sender manually doesn't mess up scope-based channel closing") {
+            auto [tx_1, rx_1] = mpsc::make_channel<double>();
+            {
+                auto tx_2 = tx_1;  // This copy keeps the channel alive while it's in scope.
+                {
+                    auto tx_3 = tx_2;
+                    {
+                        auto tx_to_kill = std::move(tx_1);
+                    }
+                    REQUIRE_FALSE(rx_1.closed());
+
+                    tx_3.close();
+                }
+                REQUIRE_FALSE(rx_1.closed());
+            }
+            REQUIRE(rx_1.closed());
+    }
   }
 }

@@ -136,7 +136,7 @@ class Sender {
 
   void close() {
     validate();
-    channel->close();
+    channel_closer.reset();
   }
 
   [[nodiscard]] bool closed() const {
