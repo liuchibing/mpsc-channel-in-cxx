@@ -1,5 +1,10 @@
-// Copyright PA Knowledge 2023
-
+/*
+ * Copyright (c) 2023
+ *
+ * This software is licensed under the MIT License.
+ * SPDX-License-Identifier: MIT
+ *
+ */
 #include <mpsc/channel.hpp>
 
 #include <cassert>
