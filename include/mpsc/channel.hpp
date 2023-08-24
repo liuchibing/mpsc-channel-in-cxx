@@ -117,7 +117,9 @@ class Sender {
     public:
         explicit ChannelCloser(detail::Channel<T>& channel) : channel{channel} {}
         ~ChannelCloser(){
-            channel.close();
+            if ( not channel.closed()) {
+                channel.close();
+            }
         }
     };
 
