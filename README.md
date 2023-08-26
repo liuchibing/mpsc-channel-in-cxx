@@ -37,3 +37,15 @@ Feel free to explore the `tests.cpp`. The tests are also examples of the usage.
 Read the source if you need more information. Sorry for the lack of comments. ～(￣▽￣～)~
 
 Copyright (c) 2019 liuchibing.
+
+## Contributors
+
+We thank them for all of their time and hard work.
+
+### Original idea from
+
+[liuchibing](//github.com/liuchibing)
+
+### Contributors
+
+[k-channon-PA](//github.com/k-channon-PA)
