@@ -1,4 +1,5 @@
-﻿/*
+#pragma once
+/*
  * Copyright (c) 2019 liuchibing.
  *
  * This software is licensed under the MIT License.
